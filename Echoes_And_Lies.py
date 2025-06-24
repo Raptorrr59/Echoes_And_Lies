@@ -8,8 +8,11 @@ import time
 import sys
 import pygame
 
+# === GLOBALS ===
 HOST = 'localhost'
 PORT = 12345
+WIDTH, HEIGHT = 800, 600
+
 
 echoes_bank = [
     ("The stars speak only to those who listen.", True),
@@ -33,6 +36,61 @@ max_rounds = 3
 accepted_lies = 0
 
 running = True
+
+def prompt_user_info_pygame():
+    pygame.init()
+    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    pygame.display.set_caption("Echoes & Lies: Select Mode")
+    font = pygame.font.SysFont(None, 36)
+    clock = pygame.time.Clock()
+
+    input_text = ''
+    name_text = ''
+    mode_selected = False
+    done = False
+
+    while not done:
+        screen.fill((30, 30, 30))
+
+        mode_prompt = font.render("Enter 'server' or 'client':", True, (255, 255, 255))
+        screen.blit(mode_prompt, (50, 50))
+        mode_display = font.render(input_text, True, (0, 255, 0))
+        screen.blit(mode_display, (50, 90))
+
+        if mode_selected and input_text.lower() == 'client':
+            name_prompt = font.render("Enter your name:", True, (255, 255, 255))
+            screen.blit(name_prompt, (50, 150))
+            name_display = font.render(name_text, True, (0, 255, 0))
+            screen.blit(name_display, (50, 190))
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN:
+                    if not mode_selected:
+                        if input_text.lower() in ['server', 'client']:
+                            mode_selected = True
+                    elif input_text.lower() == 'server':
+                        return 'server', ''
+                    elif input_text.lower() == 'client' and name_text:
+                        return 'client', name_text
+                elif event.key == pygame.K_BACKSPACE:
+                    if not mode_selected:
+                        input_text = input_text[:-1]
+                    else:
+                        name_text = name_text[:-1]
+                else:
+                    char = event.unicode
+                    if not mode_selected:
+                        input_text += char
+                    else:
+                        name_text += char
+
+        pygame.display.flip()
+        clock.tick(30)
+
 
 def send_line(client, message):
     try:
@@ -96,11 +154,12 @@ def game_loop():
     broadcast("Two true echoes and one false are shown each round.")
     broadcast("Choose carefully! Too many lies and the library is lost...\n")
 
+    whisperer = random.choice(clients)
+    for c in clients:
+        roles[c] = "Whisperer" if c == whisperer else "Explorer"
+
     while current_round < max_rounds:
         with lock:
-            whisperer = random.choice(clients)
-            for c in clients:
-                roles[c] = "Whisperer" if c == whisperer else "Explorer"
 
             echoes = random.sample(echoes_bank, 3)
             if sum(1 for e in echoes if e[1]) != 2:
@@ -185,11 +244,7 @@ def start_server():
 
 # === CLIENT CODE (with physics/visual echo orbs using pygame) ===
 
-def start_client():
-    import pygame
-    import threading
-
-    name = input("Enter your name: ")
+def start_client(name):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((HOST, PORT))
     s.sendall(name.encode())
@@ -320,10 +375,12 @@ def start_client():
     s.close()
 
 if __name__ == '__main__':
-    mode = input("Start as (server/client): ").strip().lower()
-    if mode == 'server':
-        start_server()
-    elif mode == 'client':
-        start_client()
-    else:
-        print("Invalid mode. Choose 'server' or 'client'.")
+    result = prompt_user_info_pygame()
+    if result is not None:
+        mode, name = result
+        if mode == 'server':
+            start_server()
+        elif mode == 'client':
+            start_client(name)
+        else:
+            print("Invalid mode. Choose 'server' or 'client'.")
